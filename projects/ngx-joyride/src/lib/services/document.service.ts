@@ -1,6 +1,5 @@
-import { Injectable, ElementRef, Inject, PLATFORM_ID } from '@angular/core';
+import { Injectable, ElementRef } from '@angular/core';
 import { DomRefService } from './dom.service';
-import { isPlatformBrowser } from "@angular/common";
 
 export interface IDocumentService {
     getElementFixedTop(elementRef: ElementRef): number;
@@ -28,15 +27,11 @@ export interface IDocumentService {
 export class DocumentService implements IDocumentService {
     private documentHeight: number;
 
-    constructor(private readonly DOMService: DomRefService, @Inject(PLATFORM_ID) platformId: Object) {
-        if (!isPlatformBrowser(platformId)) {
-            return;
-        }
+    constructor(private readonly DOMService: DomRefService) {
         this.setDocumentHeight();
-        var doc = DOMService.getNativeDocument();
-        if (doc && !doc.elementsFromPoint) {
+        if (!document.elementsFromPoint) {
             // IE 11 - Edge browsers
-            doc.elementsFromPoint = this.elementsFromPoint.bind(this);
+            document.elementsFromPoint = this.elementsFromPoint.bind(this);
         }
     }
 
@@ -107,33 +102,55 @@ export class DocumentService implements IDocumentService {
         if (elements1.length === 0 && elements2.length === 0) return 1;
         if (
             this.getFirstElementWithoutKeyword(elements1, keywordToDiscard) !==
-                elementRef.nativeElement ||
+            elementRef.nativeElement ||
             this.getFirstElementWithoutKeyword(elements2, keywordToDiscard) !==
-                elementRef.nativeElement
+            elementRef.nativeElement
         ) {
             return 2;
         }
         return 3;
     }
 
-    scrollIntoView(elementRef: ElementRef, isElementFixed: boolean): void {
+    // scrollIntoView(elementRef: ElementRef, isElementFixed: boolean, fixedHeaderHeight?: number): void {
+    //     const firstScrollableParent = this.getFirstScrollableParent(
+    //         elementRef.nativeElement
+    //     );
+    //     const top = isElementFixed
+    //         ? this.getElementFixedTop(elementRef)
+    //         : this.getElementAbsoluteTop(elementRef);
+    //     if (
+    //         firstScrollableParent !== this.DOMService.getNativeDocument().body
+    //     ) {
+    //         if (firstScrollableParent.scrollTo) {
+    //             firstScrollableParent.scrollTo(0, top - fixedHeaderHeight);
+    //         } else {
+    //             // IE 11 - Edge browsers
+    //             firstScrollableParent.scrollTop = top - fixedHeaderHeight;
+    //         }
+    //     } else {
+    //         this.DOMService.getNativeWindow().scrollTo(0, top - fixedHeaderHeight);
+    //     }
+    // }
+
+    scrollIntoView(elementRef: ElementRef, isElementFixed: boolean, fixedHeaderHeight?: number): void {
         const firstScrollableParent = this.getFirstScrollableParent(
             elementRef.nativeElement
         );
         const top = isElementFixed
             ? this.getElementFixedTop(elementRef)
-            : this.getElementAbsoluteTop(elementRef);
+            : this.firstScrollableParentScrollOffset(elementRef).y +  elementRef.nativeElement.getBoundingClientRect().top;
+        // : this.getElementAbsoluteTop(elementRef); // Returns incorrect values if body elem doesnt have scroll and some custom child elem of body has scrollbar
         if (
             firstScrollableParent !== this.DOMService.getNativeDocument().body
         ) {
             if (firstScrollableParent.scrollTo) {
-                firstScrollableParent.scrollTo(0, top - 150);
+                firstScrollableParent.scrollTo(0, top - fixedHeaderHeight);
             } else {
                 // IE 11 - Edge browsers
-                firstScrollableParent.scrollTop = top - 150;
+                firstScrollableParent.scrollTop = top - fixedHeaderHeight;
             }
         } else {
-            this.DOMService.getNativeWindow().scrollTo(0, top - 150);
+            this.DOMService.getNativeWindow().scrollTo(0, top - fixedHeaderHeight);
         }
     }
 
@@ -192,16 +209,16 @@ export class DocumentService implements IDocumentService {
         const scroll = (node: any) =>
             regex.test(
                 style(node, 'overflow') +
-                    style(node, 'overflow-y') +
-                    style(node, 'overflow-x')
+                style(node, 'overflow-y') +
+                style(node, 'overflow-x')
             );
 
         const scrollparent = (node: any): any => {
             return !node || node === this.DOMService.getNativeDocument().body
                 ? this.DOMService.getNativeDocument().body
                 : scroll(node)
-                ? node
-                : scrollparent(node.parentNode);
+                    ? node
+                    : scrollparent(node.parentNode);
         };
 
         return scrollparent(node);
@@ -217,6 +234,20 @@ export class DocumentService implements IDocumentService {
             documentRef.body.clientHeight,
             documentRef.documentElement.clientHeight
         );
+    }
+
+    private firstScrollableParentScrollOffset(elementRef?: ElementRef) {
+        if(elementRef) {
+            const firstScrollableParent = this.getFirstScrollableParent(
+                elementRef.nativeElement
+            );
+            if(firstScrollableParent) {
+                return {
+                    x: firstScrollableParent.scrollLeft,
+                    y: firstScrollableParent.scrollTop
+                }
+            }
+        }
     }
 
     private getScrollOffsets() {
@@ -257,8 +288,8 @@ export class DocumentService implements IDocumentService {
                 parent = false;
             }
         } while (parent);
-        parents.forEach(function(parent) {
-            return (parent.style.pointerEvents = 'all');
+        parents.forEach(function(p) {
+            return (p.style.pointerEvents = 'all');
         });
         return parents;
     }
@@ -270,7 +301,7 @@ export class DocumentService implements IDocumentService {
         while (
             elements[0] &&
             elements[0].classList.toString().includes(keyword)
-        ) {
+            ) {
             elements.shift();
         }
         return elements[0];

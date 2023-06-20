@@ -32,7 +32,7 @@ export class JoyrideStepService implements IJoyrideStepService {
     private winTopPosition: number = 0;
     private winBottomPosition: number = 0;
     private stepsObserver: ReplaySubject<JoyrideStepInfo> = new ReplaySubject<JoyrideStepInfo>();
-
+    private fixedHeaderHeight: number = 0;
     constructor(
         private readonly backDropService: JoyrideBackdropService,
         private readonly eventListener: EventListenerService,
@@ -105,10 +105,10 @@ export class JoyrideStepService implements IJoyrideStepService {
         this.tryShowStep(StepActionType.NEXT);
     }
 
-    private async navigateToStepPage(action: StepActionType) {
+    private navigateToStepPage(action: StepActionType) {
         let stepRoute = this.stepsContainerService.getStepRoute(action);
         if (stepRoute) {
-            return await this.router.navigate([stepRoute]);
+            this.router.navigate([stepRoute]);
         }
     }
 
@@ -120,9 +120,16 @@ export class JoyrideStepService implements IJoyrideStepService {
         });
     }
 
-    private async tryShowStep(actionType: StepActionType) {
-        await this.navigateToStepPage(actionType);
+    private tryShowStep(actionType: StepActionType) {
+        this.navigateToStepPage(actionType);
         const timeout = this.optionsService.getWaitingTime();
+        const fixedHeader = this.optionsService.getFixedHeader();
+        if(fixedHeader) {
+            const fixedHeaderEl =  this.DOMService.getNativeDocument().body.querySelector(fixedHeader);
+            if(fixedHeaderEl) {
+                this.fixedHeaderHeight = fixedHeaderEl.getBoundingClientRect().height;
+            }
+        }
         if (timeout > 100) this.backDropService.remove();
         setTimeout(() => {
             try {
@@ -144,12 +151,12 @@ export class JoyrideStepService implements IJoyrideStepService {
         this.currentStep = this.stepsContainerService.get(actionType);
 
         if (this.currentStep == null) throw new JoyrideStepDoesNotExist('');
-        this.notifyStepClicked(actionType);
         // Scroll the element to get it visible if it's in a scrollable element
         this.scrollIfElementBeyondOtherElements();
         this.backDropService.draw(this.currentStep);
         this.drawStep(this.currentStep);
         this.scrollIfStepAndTargetAreNotVisible();
+        this.notifyStepClicked(actionType);
     }
 
     private notifyStepClicked(actionType: StepActionType) {
@@ -229,6 +236,10 @@ export class JoyrideStepService implements IJoyrideStepService {
         }
         if (this.isElementBeyondOthers() === 2) {
             this.documentService.scrollToTheBottom(this.currentStep.targetViewContainer.element);
+        }
+
+        if (this.isElementBeyondOthers() === 2 && this.documentService.isParentScrollable(this.currentStep.targetViewContainer.element)) { // Added to handle middle section & with parentscrollable
+            this.documentService.scrollIntoView(this.currentStep.targetViewContainer.element, this.currentStep.isElementOrAncestorFixed, this.fixedHeaderHeight);
         }
         if (this.isElementBeyondOthers() === 1 && this.documentService.isParentScrollable(this.currentStep.targetViewContainer.element)) {
             this.documentService.scrollIntoView(this.currentStep.targetViewContainer.element, this.currentStep.isElementOrAncestorFixed);
